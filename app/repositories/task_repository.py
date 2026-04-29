@@ -1,42 +1,86 @@
 from bson import ObjectId
+from typing import List, Optional
 from datetime import datetime, timezone
-from typing import Optional
+from app.db.mongodb import get_database
+from app.schemas.task import TaskCreate, TaskUpdate, TaskStatus
 
 
-def _doc_to_task(doc: dict) -> dict:
-    doc = dict(doc)
-    doc["id"] = str(doc.pop("_id"))
-    return doc
+def _task_helper(task) -> dict:
+    return {
+        "_id": str(task["_id"]),
+        "title": task["title"],
+        "description": task.get("description"),
+        "points": task["points"],
+        "assigned_to_id": task["assigned_to_id"],
+        "family_id": task["family_id"],
+        "status": task["status"],
+        "task_type": task["task_type"],
+        "created_at": task["created_at"],
+    }
 
 
-async def create_task(db, task_data: dict) -> dict:
-    task_data = dict(task_data)
-    task_data["completed"] = False
-    task_data["created_at"] = datetime.now(timezone.utc)
-    result = await db.tasks.insert_one(task_data)
-    task_data["id"] = str(result.inserted_id)
-    return task_data
+async def get_all_tasks() -> List[dict]:
+    db = get_database()
+    collection = db.tasks
+    tasks = []
+    async for task in collection.find():
+        tasks.append(_task_helper(task))
+    return tasks
 
 
-async def get_task(db, task_id: str) -> Optional[dict]:
-    doc = await db.tasks.find_one({"_id": ObjectId(task_id)})
-    return _doc_to_task(doc) if doc else None
+async def get_task_by_id(task_id: str) -> Optional[dict]:
+    db = get_database()
+    collection = db.tasks
+    if not ObjectId.is_valid(task_id):
+        return None
+    task = await collection.find_one({"_id": ObjectId(task_id)})
+    if task:
+        return _task_helper(task)
+    return None
 
 
-async def get_tasks(db) -> list:
-    cursor = db.tasks.find()
-    docs = await cursor.to_list(length=100)
-    return [_doc_to_task(doc) for doc in docs]
+async def get_tasks_by_user(user_id: str) -> List[dict]:
+    db = get_database()
+    collection = db.tasks
+    tasks = []
+    async for task in collection.find({"assigned_to_id": user_id}):
+        tasks.append(_task_helper(task))
+    return tasks
 
 
-async def update_task(db, task_id: str, update_data: dict) -> Optional[dict]:
-    await db.tasks.update_one(
-        {"_id": ObjectId(task_id)},
-        {"$set": update_data},
-    )
-    return await get_task(db, task_id)
+async def create_task(task_data: TaskCreate) -> dict:
+    db = get_database()
+    collection = db.tasks
+    task_dict = task_data.model_dump()
+    task_dict["status"] = TaskStatus.pending
+    task_dict["created_at"] = datetime.now(timezone.utc)
+    result = await collection.insert_one(task_dict)
+    new_task = await collection.find_one({"_id": result.inserted_id})
+    return _task_helper(new_task)
 
 
-async def delete_task(db, task_id: str) -> bool:
-    result = await db.tasks.delete_one({"_id": ObjectId(task_id)})
+async def update_task(task_id: str, task_data: TaskUpdate) -> Optional[dict]:
+    db = get_database()
+    collection = db.tasks
+    if not ObjectId.is_valid(task_id):
+        return None
+    update_data = {k: v for k, v in task_data.model_dump().items() if v is not None}
+
+    if len(update_data) >= 1:
+        await collection.update_one(
+            {"_id": ObjectId(task_id)}, {"$set": update_data}
+        )
+    
+    updated_task = await collection.find_one({"_id": ObjectId(task_id)})
+    if updated_task:
+        return _task_helper(updated_task)
+    return None
+
+
+async def delete_task(task_id: str) -> bool:
+    db = get_database()
+    collection = db.tasks
+    if not ObjectId.is_valid(task_id):
+        return False
+    result = await collection.delete_one({"_id": ObjectId(task_id)})
     return result.deleted_count > 0

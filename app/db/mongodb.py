@@ -1,14 +1,14 @@
-from motor.motor_asyncio import AsyncIOMotorClient
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from app.core.config import settings
 
 client: AsyncIOMotorClient | None = None
-database = None
+db: AsyncIOMotorDatabase | None = None
 
 
 async def connect_to_mongo() -> None:
-    global client, database
+    global client, db
     client = AsyncIOMotorClient(settings.MONGODB_URL)
-    database = client[settings.DATABASE_NAME]
+    db = client[settings.DATABASE_NAME]
 
 
 async def close_mongo_connection() -> None:
@@ -17,5 +17,7 @@ async def close_mongo_connection() -> None:
         client.close()
 
 
-def get_db():
-    return database
+def get_database() -> AsyncIOMotorDatabase:
+    if db is None:
+        raise Exception("Database not initialized. Call connect_to_mongo first.")
+    return db

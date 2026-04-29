@@ -1,7 +1,12 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.db import mongodb
-from app.routers import task_router, balance_router, reward_router
+from app.routers import (
+    task_router,
+    balance_router,
+    reward_router,
+    family_router,
+)
 
 
 @asynccontextmanager
@@ -11,13 +16,20 @@ async def lifespan(app: FastAPI):
     await mongodb.close_mongo_connection()
 
 
-app = FastAPI(title="StarLance API", lifespan=lifespan)
+app = FastAPI(
+    title="StarLance API",
+    description="A gamified task management system for families.",
+    version="1.0.0",
+    lifespan=lifespan,
+)
 
-app.include_router(task_router.router, prefix="/tasks", tags=["tasks"])
-app.include_router(balance_router.router, prefix="/balance", tags=["balance"])
-app.include_router(reward_router.router, prefix="/rewards", tags=["rewards"])
+# Include all the routers
+app.include_router(family_router.router)
+app.include_router(task_router.router)
+app.include_router(reward_router.router)
+app.include_router(balance_router.router)
 
 
-@app.get("/")
+@app.get("/", tags=["Root"])
 async def root():
-    return {"message": "StarLance API"}
+    return {"message": "Welcome to the StarLance API!"}

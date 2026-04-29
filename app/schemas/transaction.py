@@ -1,23 +1,30 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
+from enum import Enum
+from typing import Optional
+
+
+class TransactionType(str, Enum):
+    earn = "earn"
+    redeem = "redeem"
 
 
 class TransactionCreate(BaseModel):
-    member_id: str
+    user_id: str
+    transaction_type: TransactionType
     points: int
-    type: str
-    reference_id: str
+    task_id: Optional[str] = None
 
 
 class TransactionResponse(BaseModel):
-    id: str
-    member_id: str
+    id: str = Field(..., alias="_id")
+    user_id: str
+    transaction_type: TransactionType
     points: int
-    type: str
-    reference_id: str
+    task_id: Optional[str] = None
     created_at: datetime
 
 
 class BalanceResponse(BaseModel):
-    member_id: str
+    user_id: str
     balance: int
